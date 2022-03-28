@@ -1,9 +1,12 @@
 server:
   port: 8888
 
+zk:
+  host: 106.13.14.223:32181
+
 rest:
   school: 电子科技大学成都学院
-  restaurant: 晨曦餐厅
+  restaurant: 霞光餐厅
   window: 窗口1
   printFilePath: /home/chen/print/
   printerName: POS-58

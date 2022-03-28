@@ -1,17 +1,20 @@
-package com.chen.service.impl;
+package com.chen.service;
 
+import com.alibaba.fastjson.JSON;
 import com.chen.model.Order;
 import com.chen.model.OrderGood;
 import com.chen.model.TemplateModel;
-import com.chen.service.PrintOrderService;
+import com.chen.utils.ZkStringSerializer;
+import org.I0Itec.zkclient.ZkClient;
 import org.apache.pdfbox.pdmodel.PDDocument;
 import org.apache.pdfbox.printing.PDFPrintable;
 import org.apache.pdfbox.printing.Scaling;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.stereotype.Service;
+import org.springframework.stereotype.Component;
 import org.thymeleaf.TemplateEngine;
 
+import javax.annotation.PostConstruct;
 import javax.print.PrintService;
 import javax.print.attribute.HashPrintRequestAttributeSet;
 import javax.print.attribute.standard.Sides;
@@ -22,8 +25,8 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 
-@Service
-public class PrintOrderServiceImpl implements PrintOrderService {
+@Component
+public class PrintOrderServiceImpl {
 
     @Value("${rest.school}")
     private String schoolName;
@@ -40,10 +43,27 @@ public class PrintOrderServiceImpl implements PrintOrderService {
     @Value("${rest.printerName}")
     private String printerName;
 
+    @Value("${zk.host}")
+    private String zkHost;
+
     @Autowired
     private TemplateEngine engine;
 
-    @Override
+    @PostConstruct
+    private void print() {
+        ZkClient zkClient = new ZkClient(zkHost, 30000, 20000, new ZkStringSerializer());
+        String nodeName = "/" + schoolName + "/" + restName + "/" + windowName;
+        zkClient.subscribeChildChanges(nodeName, (parentPath, currentChilds) -> {
+            for (String child : currentChilds) {
+                String data = zkClient.readData(parentPath + "/" + child);
+                Order order = JSON.parseObject(data, Order.class);
+                OrderGood[] orderGoods = JSON.parseObject(order.getGoods(), OrderGood[].class);
+                doPrint(order, orderGoods);
+                zkClient.deleteRecursive(parentPath + "/" + child);
+            }
+        });
+    }
+
     public void doPrint(Order order, OrderGood[] orderGoods) {
         List<OrderGood> myOrder = new ArrayList<>();
         if (order.getSchoolName().equals(schoolName) && order.getRestName().equals(restName)) {
@@ -129,12 +149,12 @@ public class PrintOrderServiceImpl implements PrintOrderService {
     public static Paper getPaper() {
         Paper paper = new Paper();
         // 默认为A4纸张，对应像素宽和高分别为 595, 842
-        int width = 595;
+        int width = 500;
         int height = 842;
         // 设置边距，单位是像素，10mm边距，对应 28px
-        int marginLeft = 10;
+        int marginLeft = 5;
         int marginRight = 0;
-        int marginTop = 10;
+        int marginTop = 0;
         int marginBottom = 0;
         paper.setSize(width, height);
         // 下面一行代码，解决了打印内容为空的问题
